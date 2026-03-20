@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EAP-MD5 802.1X Handshake Viewer</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .pane {
+      overflow: auto;
+      min-width: 180px;
+    }
+
+    .left-pane {
+      width: 50%;
+      background: #ffffff;
+      border-right: 1px solid #dbe2ea;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .right-pane {
+      width: 50%;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .divider {
+      width: 10px;
+      cursor: col-resize;
+      background: linear-gradient(to right, #d1d5db, #9ca3af, #d1d5db);
+      position: relative;
+      flex: 0 0 10px;
+    }
+
+    .divider:hover::after,
+    .divider.dragging::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #dbe2ea;
+      background: #f8fafc;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .right-pane .toolbar {
+      background: #111827;
+      border-bottom: 1px solid #374151;
+    }
+
+    .toolbar h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #111827;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button:hover {
+      background: #f3f4f6;
+    }
+
+    .svg-wrap {
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      overflow: auto;
+      height: 100%;
+    }
+
+    .hint {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .status {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+      line-height: 1.55;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    #svgContainer {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    #svgContainer svg {
+      width: 100%;
+      max-width: 900px;
+      height: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #fcfdff;
+      transform-origin: top left;
+      transition: transform 0.15s ease;
+    }
+
+    #svgContainer .node {
+      fill: #dbeafe;
+      stroke: #2563eb;
+      stroke-width: 2;
+      cursor: pointer;
+      transition: fill 0.15s ease, transform 0.15s ease;
+    }
+
+    #svgContainer .node:hover {
+      fill: #bfdbfe;
+    }
+
+    #svgContainer .node.active {
+      fill: #93c5fd;
+      stroke: #1d4ed8;
+      stroke-width: 3;
+    }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+  <section class="pane left-pane" id="leftPane">
+    <div class="toolbar">
+      <h2>EAP-MD5 Handshake</h2>
+      <div class="controls">
+        <button id="zoomOut">− Zoom</button>
+        <button id="zoomIn">＋ Zoom</button>
+        <button id="resetZoom">Reset</button>
+        <span class="hint">Uses diagram.svg + frame_XX.yaml files</span>
+      </div>
+    </div>
+
+    <div class="svg-wrap">
+      <div id="svgContainer"></div>
+    </div>
+  </section>
+
+  <div class="divider" id="divider" role="separator" aria-orientation="vertical" aria-label="Resize panels"></div>
+
+  <section class="pane right-pane">
+    <div class="toolbar">
+      <h2>Handshake Details</h2>
+      <div class="status" id="status">Showing: frame_15.yaml</div>
+    </div>
+    <pre id="yamlViewer"># Loading frame_15.yaml...</pre>
+  </section>
+</div>
+
+<script>
+  const viewer = document.getElementById('yamlViewer');
+  const status = document.getElementById('status');
+  const divider = document.getElementById('divider');
+  const app = document.getElementById('app');
+  const leftPane = document.getElementById('leftPane');
+  const svgContainer = document.getElementById('svgContainer');
+
+  let svg = null;
+  let nodeGroups = [];
+  let nodeRects = [];
+  let scale = 1;
+  let isDragging = false;
+
+  function normalizeFrameNumber(value) {
+    if (!value) return null;
+    const match = String(value).match(/(\d+)/);
+    return match ? match[1] : null;
+  }
+
+  function getYamlFileForGroup(group) {
+    if (!group) return null;
+
+    if (group.dataset.file) {
+      return group.dataset.file;
+    }
+
+    if (group.dataset.target) {
+      const n = normalizeFrameNumber(group.dataset.target);
+      if (n) return `frame_${n}.yaml`;
+    }
+
+    const text = group.textContent || "";
+    const n = normalizeFrameNumber(text);
+    if (n) return `frame_${n}.yaml`;
+
+    return null;
+  }
+
+  function clearActiveNodes() {
+    nodeRects.forEach(rect => rect.classList.remove('active'));
+  }
+
+  function setActiveNode(group) {
+    clearActiveNodes();
+    const activeRect = group.querySelector('.node');
+    if (activeRect) activeRect.classList.add('active');
+  }
+
+  async function loadYamlFile(fileName) {
+    if (!fileName) {
+      viewer.textContent = "# Could not determine YAML file for this frame";
+      return;
+    }
+
+    try {
+      const res = await fetch(fileName);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      viewer.textContent = text;
+      status.textContent = `Showing: ${fileName}`;
+    } catch (err) {
+      viewer.textContent =
+              `# Failed to load ${fileName}
+# ${err.message}
+# Make sure index.html, diagram.svg, and frame_XX.yaml files are in the same folder.
+# Also open through a local server, not file://`;
+      status.textContent = `Showing: ${fileName}`;
+    }
+  }
+
+  function applyZoom() {
+    if (svg) {
+      svg.style.transform = `scale(${scale})`;
+    }
+  }
+
+  function bindSvgClicks() {
+    nodeGroups = Array.from(svgContainer.querySelectorAll('.svg-node'));
+    nodeRects = Array.from(svgContainer.querySelectorAll('.node'));
+    svg = svgContainer.querySelector('svg');
+
+    if (!svg) {
+      viewer.textContent = "# diagram.svg loaded, but no <svg> element was found.";
+      return;
+    }
+
+    nodeGroups.forEach(group => {
+      group.addEventListener('click', async () => {
+        const yamlFile = getYamlFileForGroup(group);
+        setActiveNode(group);
+        await loadYamlFile(yamlFile);
+      });
+    });
+
+    const defaultGroup =
+            nodeGroups.find(g => getYamlFileForGroup(g) === "frame_15.yaml") ||
+            nodeGroups[0];
+
+    if (defaultGroup) {
+      setActiveNode(defaultGroup);
+      loadYamlFile(getYamlFileForGroup(defaultGroup));
+    } else {
+      loadYamlFile("frame_15.yaml");
+    }
+
+    applyZoom();
+  }
+
+  async function loadSvg() {
+    try {
+      const res = await fetch("diagram.svg");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const svgText = await res.text();
+      svgContainer.innerHTML = svgText;
+      bindSvgClicks();
+    } catch (err) {
+      svgContainer.innerHTML =
+              `<div style="padding:24px;color:#991b1b;background:#fee2e2;border:1px solid #fecaca;border-radius:12px;max-width:900px;">
+            Failed to load <strong>diagram.svg</strong><br>
+            Make sure it is in the same folder as index.html and served from a local server.
+          </div>`;
+      viewer.textContent = `# Failed to load diagram.svg\n# ${err.message}`;
+    }
+  }
+
+  document.getElementById('zoomIn').addEventListener('click', () => {
+    scale = Math.min(scale + 0.1, 2.5);
+    applyZoom();
+  });
+
+  document.getElementById('zoomOut').addEventListener('click', () => {
+    scale = Math.max(scale - 0.1, 0.5);
+    applyZoom();
+  });
+
+  document.getElementById('resetZoom').addEventListener('click', () => {
+    scale = 1;
+    applyZoom();
+  });
+
+  divider.addEventListener('mousedown', () => {
+    isDragging = true;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const appRect = app.getBoundingClientRect();
+    let newLeftWidth = e.clientX - appRect.left;
+    const minWidth = 180;
+    const maxWidth = appRect.width - minWidth - divider.offsetWidth;
+    newLeftWidth = Math.max(minWidth, Math.min(newLeftWidth, maxWidth));
+    leftPane.style.width = `${newLeftWidth}px`;
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  loadSvg();
+</script>
+</body>
+</html>

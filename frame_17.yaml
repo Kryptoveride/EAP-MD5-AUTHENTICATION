@@ -1,0 +1,53 @@
+frame:
+  title: "Frame 17: Packet, 41 bytes on wire (328 bits), 41 bytes captured (328 bits)"
+  encapsulation_type: "IEEE 802.11 Wireless LAN (20)"
+  arrival_time: "Jun 12, 2006 10:49:08.939463000 EDT"
+  utc_arrival_time: "Jun 12, 2006 14:49:08.939463000 UTC"
+  epoch_arrival_time: "1150123748.939463000"
+  time_shift_for_this_packet: "0.000000000 seconds"
+  time_delta_from_previous_captured_frame: "600.000 microseconds"
+  time_delta_from_previous_displayed_frame: "920.000 microseconds"
+  time_since_reference_or_first_frame: "2.742158000 seconds"
+  frame_number: 17
+  frame_length: "41 bytes (328 bits)"
+  capture_length: "41 bytes (328 bits)"
+  frame_is_marked: false
+  frame_is_ignored: false
+  protocols_in_frame: "wlan:llc:eapol"
+  character_encoding: "ASCII (0)"
+
+wlan:
+  title: "IEEE 802.11 Data, Flags: .......F."
+  type_subtype: "Data (0x0020)"
+  frame_control_field: "0x0802"
+  duration_line: ".000 0000 0010 1100 = Duration: 44 microseconds"
+  receiver_address: "DLink_58:f1:ce (00:0d:88:58:f1:ce)"
+  transmitter_address: "CiscoLinksys_19:6e:9a (00:0f:66:19:6e:9a)"
+  destination_address: "DLink_58:f1:ce (00:0d:88:58:f1:ce)"
+  source_address: "CiscoLinksys_19:6e:9a (00:0f:66:19:6e:9a)"
+  bss_id: "CiscoLinksys_19:6e:9a (00:0f:66:19:6e:9a)"
+  sta_address: "DLink_58:f1:ce (00:0d:88:58:f1:ce)"
+  fragment_number_line: ".... .... .... 0000 = Fragment number: 0"
+  sequence_number_line: "0000 0001 0010 .... = Sequence number: 18"
+  wlan_flags: "......F."
+
+llc:
+  title: "Logical-Link Control"
+  dsap: "SNAP (0xaa)"
+  ssap: "SNAP (0xaa)"
+  control_field: "U, func=UI (0x03)"
+  organization_code: "00:00:00 (Officially Xerox, but 0:0:0:0:0:0 is more common)"
+  type: "802.1X Authentication (0x888e)"
+
+dot1x_authentication:
+  title: "802.1X Authentication"
+  version: "802.1X-2001 (1)"
+  type: "EAP Packet (0)"
+  length: 5
+
+extensible_authentication_protocol:
+  title: "Extensible Authentication Protocol"
+  code: "Request (1)"
+  id: 0
+  length: 5
+  type: "Identity (1)"
